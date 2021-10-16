@@ -1,7 +1,8 @@
 import datetime
 from PyQt5.QtWidgets import QPushButton, QTextBrowser, QVBoxLayout
-from user import User
+from user import User, get_self_user
 import platform
+from dataHandler import DataHandler
 
 
 def get_tasksInfo_text(user):
@@ -12,25 +13,20 @@ def get_tasksInfo_text(user):
     tasks_list = TasksList.get_tasks_list()
     # --- Проверка на непроверенные задачи
     notcheck_list = [t for t in tasks_list if t.creator_name == user.name and \
-                     str(t.performer_name) != 'None' and t.done not in ('False', 'None')]
+                     str(t.performer_name) != 'None' and t.done not in ('False', 'None') and \
+                     not t.done.startswith('Decline(')]
     if len(notcheck_list) > 0:
         s += 'У вас есть непроверенные задачи\n'
+    # --- Проверка на отклоненные задачи
+    decline_list = [t for t in tasks_list if t.performer_name == user.name and \
+                    t.done.startswith('Decline(')]
+    if len(decline_list) > 0:
+        s += 'У вас есть отклоненные задачи\n'
 
     return s
 
 
 class TasksList:
-    filename = 'a.txt'
-
-    @staticmethod
-    def resave_tasks_list(tasks_list=None):
-        with open(TasksList.filename, 'w+', encoding='utf-8') as f:
-            f.write('')
-        if tasks_list is None:
-            tasks_list = TasksList.get_tasks_list()
-        for t in tasks_list:
-            t.save()
-
     @staticmethod
     def get_tasks_list(is_for_save=False):
         """Получение списка заданий
@@ -38,12 +34,8 @@ class TasksList:
         :return: list
         """
         a = []
-        with open(TasksList.filename, 'r', encoding='utf-8') as f:
-            for line in f.readlines():
-                if line.strip() == '':
-                    continue
-                a.append(Task(*line.split('|||')) if not is_for_save
-                         else TaskForSave(*line.split('|||')))
+        for v in DataHandler.get_tasks_list():
+            a.append(Task(*v) if not is_for_save else TaskForSave(*v))
         return a
 
     @staticmethod
@@ -53,12 +45,12 @@ class TasksList:
         :param data: Загаловок или айди
         :return: class Task
         """
-        tasks = TasksList.get_tasks_list()
-        if not tasks:
-            return None
         if isinstance(data, str) and data.isdigit():
             data = int(data)
-        return [t for t in tasks if t.title == data or t.id == data][0]
+        if isinstance(data, int):
+            return Task(*DataHandler.get_task('id', data))
+        else:
+            return Task(*DataHandler.get_task('title', data))
 
 
 class Task(TasksList):
@@ -73,7 +65,7 @@ class Task(TasksList):
         :param performer_name: Ник исполнителя
         :param done: Примечание к выполненному заданию
         """
-        self.id = int(id) if id is not None else len(open(TasksList.filename, 'r').readlines()) - 1
+        self.id = int(id) if id is not None else len(Task.get_tasks_list(True))
         self.title = str(title)
         self.price = int(price)
         self.description = str(description)
@@ -86,35 +78,27 @@ class Task(TasksList):
 
     def save(self):
         """Сохранение задания в БД"""
-        with open(TasksList.filename, 'a', encoding='utf-8') as f:
-            f.write('|||'.join([self.title, str(self.price), self.description, self.creator_name,
-                                str(self.performer_name), str(self.create_time), str(self.id), str(self.done)]) + '\n')
+        DataHandler.new_task(self.title, str(self.price), self.description, self.creator_name,
+                             str(self.performer_name), str(self.create_time), str(self.id), str(self.done))
 
     @staticmethod
     def delete(taskid):
-        t_list = TasksList.get_tasks_list()
-        t_list.pop(int(taskid))
-        TasksList.resave_tasks_list(t_list)
+        DataHandler.delete_task(taskid)
 
     @staticmethod
     def finish(taskid, url=None):
         """Отметить задачу выполненной или завершить задачу"""
-        tasks_list = TasksList.get_tasks_list()
         task = Task.get_task(int(taskid))
-        if User.get_user(platform.node()).name == task.creator_name:
-            tasks_list.pop(int(taskid))
+        if get_self_user().name == task.creator_name:
+            Task.delete(int(taskid))
             User.get_user(task.performer_name).balance += task.price
         else:
             task.done = url
-            tasks_list = TasksList.get_tasks_list()
-            tasks_list.pop(int(taskid))
-            tasks_list = [i for i in tasks_list if not i == task] + [task]  # Занесение таска в конец списка
-        TasksList.resave_tasks_list(tasks_list)
 
     @staticmethod
     def agree(taskid):
         task = Task.get_task(int(taskid))
-        task.performer_name = User.get_user(platform.node()).name
+        task.performer_name = get_self_user().name
 
     def __setattr__(self, key, value):
         """Изменение атрибута с занесением в БД"""
@@ -122,8 +106,7 @@ class Task(TasksList):
         tasks_list = Task.get_tasks_list(is_for_save=True)
         t = [t for t in tasks_list if int(t.id) == self.id]
         if len(t) == 1:
-            tasks_list[tasks_list.index(t[0])].__dict__[key] = value
-            self.resave_tasks_list(tasks_list)
+            DataHandler.update_task(self.id, key, value)
 
     def __str__(self):
         s = f'''{self.title} (Создатель: {self.creator_name}, выполняет: {self.performer_name})

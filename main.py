@@ -9,6 +9,7 @@ from PyQt5.QtCore import QEvent, Qt
 from PyQt5 import uic
 from maindesing import Ui_MainWindow
 
+from dataHandler import *
 from tasksList import *
 from user import *
 
@@ -26,37 +27,11 @@ class AskUrlDialog(QWidget):
             self.le.setText(str(text))
 
 
-class PreDialog(QDialog):
-    def __init__(self, parent=None):
-        super(PreDialog, self).__init__(parent)
-        self.parent = parent
-
-        self.setWindowTitle('Task create')
-        self.setModal(True)
-        self.line_title = QLineEdit()
-        self.line_price = QLineEdit()
-        self.line_description = QLineEdit()
-        self.connect = QPushButton("Create")
-
-        self.form = QFormLayout()
-        self.form.setSpacing(20)
-
-        self.form.addRow("&Название:", self.line_title)
-        self.form.addRow("&Цена:", self.line_price)
-        self.form.addRow("&Описание:", self.line_description)
-        self.form.addRow(self.connect)
-
-        self.setLayout(self.form)
-
-    def create(self):
-        d = PreDialog()
-        d.show()
-
-
 class App(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
         uic.loadUi('main.ui', self)
+        self.lastupdate_time = datetime.datetime.now()
         self.initUI()
         self.initData()
 
@@ -72,16 +47,18 @@ class App(QMainWindow, Ui_MainWindow):
         self.tasksListWidget.clear()
         self.tasksListWidget.addItem(QListWidgetItem('Создать задачу'))
         for task in TasksList.get_tasks_list():
-            if task.done.strip() != 'False':
+            if task.done.strip() not in ('False', 'None'):
                 if get_self_user().name not in (task.creator_name,
                                                 task.performer_name):
                     continue
             self.tasksListWidget.addItem(QListWidgetItem(task.title))
 
     def eventFilter(self, sender, event):
-        # --- Обновление отображенных данных
-        self.profileInfo.setText(str(get_self_user()))
-        self.tasksInfo.setText(str(get_tasksInfo_text(get_self_user())))
+        # --- Обновление отображенных данных (раз в 5 секунд)
+        if (datetime.datetime.now() - self.lastupdate_time).seconds > 5:
+            self.profileInfo.setText(str(get_self_user()))
+            self.tasksInfo.setText(str(get_tasksInfo_text(get_self_user())))
+            self.lastupdate_time = datetime.datetime.now()
         # --- Отработка эвентов
         if event.type() == 1:  # Has been clicked
             if sender is self.tasksListWidget:
@@ -162,37 +139,44 @@ class App(QMainWindow, Ui_MainWindow):
         username = get_self_user().name
         if username == task.creator_name:
             if task.performer_name == 'None':
-                delbutton = QPushButton(text=f'Delete {task.id}')
+                delbutton = QPushButton(text=f'Удалить {task.id}')
                 delbutton.clicked.connect(self.delete_task)
                 self.verticalLayout.addWidget(delbutton)
             else:
                 if task.done.strip() not in ('False', 'None'):
                     self.description.setText(str(task).replace('/n', '\n\t')
                                              + f'\n\n\n\tСсылка для получения кода: {task.done}')
-                    donebutton = QPushButton(text=f'Done {task.id}')
+                    donebutton = QPushButton(text=f'Завершить {task.id}')
                     donebutton.clicked.connect(self.done_task)
                     self.verticalLayout.addWidget(donebutton)
+                    if not task.done.startswith('Decline('):
+                        declinebutton = QPushButton(text=f'Отклонить {task.id}')
+                        declinebutton.clicked.connect(self.decline_task)
+                        self.verticalLayout.addWidget(declinebutton)
         elif username == task.performer_name:
-            if task.done:
+            if task.done.startswith('Decline('):
+                self.description.setText(str(task).replace('/n', '\n\t')
+                                         + f'\n\n\n\tПричина отклонения задачи: {task.done}')
+            elif task.done not in ('False', 'None'):
                 self.description.setText(str(task).replace('/n', '\n\t')
                                          + f'\n\n\n\tСсылка для получения кода: {task.done}')
-            donebutton = QPushButton(text=f'Done {task.id}')
+            donebutton = QPushButton(text=f'Завершить {task.id}')
             donebutton.clicked.connect(self.done_task)
             self.verticalLayout.addWidget(donebutton)
         else:
-            agreebutton = QPushButton(text=f'Agree {task.id}')
+            agreebutton = QPushButton(text=f'Взяться {task.id}')
             agreebutton.clicked.connect(self.agree_task)
             self.verticalLayout.addWidget(agreebutton)
 
     def delete_task(self):
-        taskid = self.sender().text().replace("Delete", '').strip()
+        taskid = self.sender().text().replace("Удалить", '').strip()
         get_self_user().balance += Task.get_task(int(taskid)).price
         Task.delete(taskid)
         self.show_task(None)
         self.initData()
 
     def done_task(self):
-        taskid = self.sender().text().replace("Done", '').strip()
+        taskid = self.sender().text().replace("Завершить", '').strip()
         url = None
         if Task.get_task(taskid).performer_name == get_self_user().name:
             askurl = AskUrlDialog()
@@ -200,13 +184,21 @@ class App(QMainWindow, Ui_MainWindow):
             url = askurl.le.text()
         Task.finish(taskid, url)
         if Task.get_task(taskid).performer_name == get_self_user().name:
-            self.show_task(taskid)
+            self.show_task(Task.get_task(int(taskid)))
         self.initData()
 
+    def decline_task(self):
+        taskid = self.sender().text().replace("Отклонить", '').strip()
+        text, ok = QInputDialog.getText(self, 'Input Dialog',
+                                        'Введите причину отклонения:')
+        if ok and str(text):
+            task = Task.get_task(int(taskid))
+            task.done = 'Decline(' + str(text) + ')'
+
     def agree_task(self):
-        taskid = self.sender().text().replace("Agree", '').strip()
+        taskid = self.sender().text().replace("Взяться", '').strip()
         Task.agree(taskid)
-        self.show_task(taskid)
+        self.show_task(Task.get_task(int(taskid)))
 
 
 def except_hook(cls, exception, traceback):
@@ -215,10 +207,8 @@ def except_hook(cls, exception, traceback):
 
 if __name__ == '__main__':
     # --- Инициализация файлов
-    if TasksList.filename not in os.listdir():
-        open(TasksList.filename, 'w+').write('')
-    if User.filename not in os.listdir():
-        open(User.filename, 'w+').write('')
+    if 'data.db' not in os.listdir():
+        DataHandler.initialize()
     app = QApplication(sys.argv)
     ex = App()
     ex.show()

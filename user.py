@@ -1,4 +1,5 @@
 import platform
+from dataHandler import DataHandler
 
 
 class UserNotFound(Exception):
@@ -7,57 +8,46 @@ class UserNotFound(Exception):
 
 def get_self_user():
     try:
-        return User.get_user('OBAGEN')
+        return User.get_user(platform.node())
     except UserNotFound:
         User(platform.node()).save()
         return User.get_user(platform.node())
 
 
 class User:
-    filename = 'b.txt'
-
     def __init__(self, name, balance=None):
         '''Создание юзера
 
         :param name: Ник
         '''
         self.name = name
-        self.balance = 0
+        self.balance = 5
         if balance is not None:
             self.balance = int(balance)
 
     def save(self):
-        with open(User.filename, 'a') as f:
-            f.write('|||'.join([self.name, str(self.balance)]) + '\n')
+        DataHandler.new_user(self.name, str(self.balance), 'b')
 
     @staticmethod
     def get_user_list(is_save=False):
         a = []
-        with open(User.filename, 'r') as f:
-            for line in f:
-                if line.strip() == '':
-                    continue
-                if is_save:
-                    a.append(UserForSave(*line.split('|||')))
-                else:
-                    a.append(User(*line.split('|||')))
+        for v in DataHandler.get_users_list():
+            v = v[:-1]
+            a.append(User(name=v[0], balance=v[1]) if not is_save else UserForSave(name=v[0], balance=v[1]))
+        # with open(User.filename, 'r') as f:
+        #     for line in f:
+        #         if line.strip() == '':
+        #             continue
+        #         if is_save:
+        #             a.append(UserForSave(*line.split('|||')))
+        #         else:
+        #             a.append(User(*line.split('|||')))
         return a
 
     @staticmethod
     def get_user(name):
-        a = [u for u in User.get_user_list() if u.name == name]
-        if len(a) == 0:
-            raise UserNotFound()
-        return a[0]
-
-    @staticmethod
-    def resave_users_list(users_list=None):
-        with open(User.filename, 'w+') as f:
-            f.write('')
-        if users_list is None:
-            users_list = User.get_user_list()
-        for u in users_list:
-            u.save()
+        data = DataHandler.get_user('name', name)[0][:-1]
+        return User(*data)
 
     def __str__(self):
         return f'\tНик: {self.name}\n\tБаланс: {self.balance} зМ'
@@ -67,8 +57,7 @@ class User:
         users_list = User.get_user_list(is_save=True)
         u = [u for u in users_list if u.name == self.name]
         if len(u) == 1:
-            users_list[users_list.index(u[0])].__dict__[key] = value
-            self.resave_users_list(users_list)
+            DataHandler.update_user(self.name, key, value)
 
 
 class UserForSave(User):
