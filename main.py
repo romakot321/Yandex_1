@@ -6,7 +6,6 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QDialog
 from PyQt5.QtWidgets import QFormLayout, QListWidgetItem
 from PyQt5.QtWidgets import QWidget, QLineEdit, QInputDialog
 from PyQt5.QtCore import QEvent, Qt
-from PyQt5 import uic
 from maindesing import Ui_MainWindow
 
 from dataHandler import *
@@ -30,8 +29,8 @@ class AskUrlDialog(QWidget):
 class App(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
-        uic.loadUi('main.ui', self)
         self.lastupdate_time = datetime.datetime.now()
+        self.setupUi(self)
         self.initUI()
         self.initData()
 
