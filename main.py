@@ -6,11 +6,14 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QDialog
 from PyQt5.QtWidgets import QFormLayout, QListWidgetItem
 from PyQt5.QtWidgets import QWidget, QLineEdit, QInputDialog
 from PyQt5.QtCore import QEvent, Qt
+
 from maindesing import Ui_MainWindow
 
 from dataHandler import *
 from tasksList import *
 from user import *
+
+ConfigHandler = ConfigHandler()
 
 
 class AskUrlDialog(QWidget):
@@ -30,6 +33,7 @@ class App(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
         self.lastupdate_time = datetime.datetime.now()
+        self.is_login = False
         self.setupUi(self)
         self.initUI()
         self.initData()
@@ -39,11 +43,25 @@ class App(QMainWindow, Ui_MainWindow):
         self.setWindowTitle('ААА')
 
         self.tasksListWidget.installEventFilter(self)
-        self.create_form = None
+        try:
+            u = get_self_user()
+            if isinstance(u, str):
+                return
+        except UserNotFound:
+            pass
+        else:
+            u.password = ConfigHandler.password
+            try:
+                if u.login():
+                    self.is_login = True
+            except UserNotFound:
+                pass
 
     def initData(self):
         """Обновление данных в выводе задач"""
         self.tasksListWidget.clear()
+        if not self.is_login:
+            self.tasksListWidget.addItem(QListWidgetItem('Войти или зарегистрироваться'))
         self.tasksListWidget.addItem(QListWidgetItem('Создать задачу'))
         for task in TasksList.get_tasks_list():
             if task.done.strip() not in ('False', 'None'):
@@ -63,6 +81,7 @@ class App(QMainWindow, Ui_MainWindow):
             if sender is self.tasksListWidget:
                 task = self.tasksListWidget.currentItem()
                 if task:
+                    # --- Нажатие на пользовательские кнопки
                     if task.text() == 'Создать задачу':
                         for i in reversed(range(self.verticalLayout.count())):
                             w = self.verticalLayout.itemAt(i).widget()
@@ -80,11 +99,64 @@ class App(QMainWindow, Ui_MainWindow):
                         self.verticalLayout.addWidget(line_title)
                         self.verticalLayout.addWidget(line_price)
                         self.verticalLayout.addWidget(createButton)
+                    elif task.text() == 'Войти или зарегистрироваться':
+                        for i in reversed(range(self.verticalLayout.count())):
+                            w = self.verticalLayout.itemAt(i).widget()
+                            w.setParent(None)
+                            w.deleteLater()
+                        self.description.setText('')
+                        # --- Форма для ввода данных пользователя
+                        line_name = QLineEdit('Ник')
+                        line_psw = QLineEdit('Пароль')
+                        loginbutton = QPushButton("Отправить")
+                        loginbutton.clicked.connect(self.login_user)
+
+                        self.verticalLayout.addWidget(line_name)
+                        self.verticalLayout.addWidget(line_psw)
+                        self.verticalLayout.addWidget(loginbutton)
                     else:
                         task = TasksList.get_task(task.text())
                         self.show_task(task)
                         self.initData()
         return super().eventFilter(sender, event)
+
+    def login_user(self):
+        """Получение значений из формы и попытка входа в аккаунт.
+        Если акк не найден - создается."""
+        if self.is_login:
+            return
+        name, psw = '', ''
+        for i in reversed(range(self.verticalLayout.count())):
+            w = self.verticalLayout.itemAt(i).widget()
+            if w.text() == 'Отправить':
+                continue
+            else:
+                if not psw:
+                    psw = w.text()
+                elif not name:
+                    name = w.text()
+        if name and psw:
+            u = User(name, password=psw)
+            try:
+                u.login()
+            except UserNotFound:
+                u.save()
+                ConfigHandler.username = name
+                ConfigHandler.password = psw
+                self.description.setText('Пользователь создан')
+                self.is_login = True
+            except IncorrectLoginData:
+                self.description.setText('Неправильный логин или пароль')
+            else:
+                self.description.setText('Успешно')
+                self.is_login = True
+                ConfigHandler.username = name
+                ConfigHandler.password = psw
+            for i in reversed(range(self.verticalLayout.count())):
+                w = self.verticalLayout.itemAt(i).widget()
+                w.setParent(None)
+                w.deleteLater()
+            self.initData()
 
     def create_task(self):
         title, price, desc = '', 0, ''
@@ -207,7 +279,9 @@ def except_hook(cls, exception, traceback):
 if __name__ == '__main__':
     # --- Инициализация файлов
     if 'data.db' not in os.listdir():
-        DataHandler.initialize()
+        SQLHandler.initialize()
+    if 'config.ini' not in os.listdir():
+        ConfigHandler.initialize()
     app = QApplication(sys.argv)
     ex = App()
     ex.show()

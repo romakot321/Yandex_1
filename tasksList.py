@@ -2,7 +2,7 @@ import datetime
 from PyQt5.QtWidgets import QPushButton, QTextBrowser, QVBoxLayout
 from user import User, get_self_user
 import platform
-from dataHandler import DataHandler
+from dataHandler import SQLHandler
 
 
 def get_tasksInfo_text(user):
@@ -34,7 +34,7 @@ class TasksList:
         :return: list
         """
         a = []
-        for v in DataHandler.get_tasks_list():
+        for v in SQLHandler.get_tasks_list():
             a.append(Task(*v) if not is_for_save else TaskForSave(*v))
         return a
 
@@ -48,9 +48,9 @@ class TasksList:
         if isinstance(data, str) and data.isdigit():
             data = int(data)
         if isinstance(data, int):
-            return Task(*DataHandler.get_task('id', data))
+            return Task(*SQLHandler.get_task('id', data))
         else:
-            return Task(*DataHandler.get_task('title', data))
+            return Task(*SQLHandler.get_task('title', data))
 
 
 class Task(TasksList):
@@ -78,12 +78,12 @@ class Task(TasksList):
 
     def save(self):
         """Сохранение задания в БД"""
-        DataHandler.new_task(self.title, str(self.price), self.description, self.creator_name,
+        SQLHandler.new_task(self.title, str(self.price), self.description, self.creator_name,
                              str(self.performer_name), str(self.create_time), str(self.id), str(self.done))
 
     @staticmethod
     def delete(taskid):
-        DataHandler.delete_task(taskid)
+        SQLHandler.delete_task(taskid)
 
     @staticmethod
     def finish(taskid, url=None):
@@ -106,7 +106,7 @@ class Task(TasksList):
         tasks_list = Task.get_tasks_list(is_for_save=True)
         t = [t for t in tasks_list if int(t.id) == self.id]
         if len(t) == 1:
-            DataHandler.update_task(self.id, key, value)
+            SQLHandler.update_task(self.id, key, value)
 
     def __str__(self):
         s = f'''{self.title} (Создатель: {self.creator_name}, выполняет: {self.performer_name})
