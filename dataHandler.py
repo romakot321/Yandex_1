@@ -77,6 +77,7 @@ class SQLHandler:
 
     @staticmethod
     def update_user(username, name, value):
+        """Обновиление данных пользователя"""
         SQLHandler.cur.execute(f'''
             UPDATE users
             SET {name} = ?
@@ -111,6 +112,7 @@ class SQLHandler:
 
     @staticmethod
     def update_task(task_id, name, value):
+        """Обновление параметра задачи"""
         SQLHandler.cur.execute(f'''
             UPDATE tasks
             SET {name} = ?

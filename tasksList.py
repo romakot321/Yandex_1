@@ -118,9 +118,9 @@ class Task(TasksList):
 
 
 class TaskForSave(Task):
+    """Используется для сохранения данных пользователя в файл"""
     def __init__(self, title, price, description, creator_name,
                  performer_name=None, createtime=None, id=None, done=None):
-        """Используется для сохранения данных пользователя в файл"""
         args = {'title': title, 'price': price, 'description': description,
                 'creator_name': creator_name, 'performer_name': performer_name,
                 'create_time': createtime, 'id': id, 'done': done}

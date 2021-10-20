@@ -1,7 +1,6 @@
 import sys
 import os
 
-import platform
 from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QDialog
 from PyQt5.QtWidgets import QFormLayout, QListWidgetItem
 from PyQt5.QtWidgets import QWidget, QLineEdit, QInputDialog
