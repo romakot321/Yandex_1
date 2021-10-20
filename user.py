@@ -18,9 +18,6 @@ def get_self_user():
                 return 'Пожалуйста, войдите в аккаунт'
         return User.get_user(platform.node())
     except UserNotFound:
-        User(platform.node()).save()
-        return User.get_user(platform.node())
-    except UserNotFound:
         return 'Пожалуйста, войдите в аккаунт'
 
 
@@ -29,6 +26,8 @@ class User:
         '''Создание юзера
 
         :param name: Ник
+        :param balance: Баланс
+        :param password: Пароль от аккаунта(нужен для входа)
         '''
         self.name = name
         self.balance = 5
@@ -40,6 +39,7 @@ class User:
         SQLHandler.new_user(self.name, str(self.balance), self.password)
 
     def login(self, with_exceptions=True):
+        """Вход в аккаунт(сверка данных с БД)"""
         try:
             name, _, psw = SQLHandler.get_user('name', self.name)[0]
         except ValueError:
@@ -59,7 +59,6 @@ class User:
     def get_user_list(is_save=False):
         a = []
         for v in SQLHandler.get_users_list():
-            # v = v[:-1]
             a.append(User(*v) if not is_save else UserForSave(*v))
         return a
 
