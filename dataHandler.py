@@ -43,12 +43,14 @@ class SQLHandler:
             create_time    TIME,
             id             INT     UNIQUE
                                    NOT NULL,
-            done           STRING  DEFAULT None
+            done           STRING  DEFAULT None,
+            priority       INT     DEFAULT (0)
         );
         CREATE TABLE users (
-            name     VARCHAR,
-            balance  INTEGER DEFAULT (0),
-            password VARCHAR
+            name      VARCHAR UNIQUE,
+            balance   INTEGER DEFAULT (0),
+            password  VARCHAR,
+            additions STRING
         );
         '''
         SQLHandler.cur.executescript(a)
@@ -72,7 +74,7 @@ class SQLHandler:
 
     @staticmethod
     def new_user(*data):
-        SQLHandler.cur.execute(f'INSERT INTO users VALUES (?, ?, ?)', data)
+        SQLHandler.cur.execute(f'INSERT INTO users VALUES ({", ".join(list("?" * len(data)))})', data)
         SQLHandler.conn.commit()
 
     @staticmethod
@@ -102,7 +104,7 @@ class SQLHandler:
 
     @staticmethod
     def new_task(*data):
-        SQLHandler.cur.execute(f'INSERT INTO tasks VALUES (?, ?, ?, ?, ?, ?, ?, ?)', data)
+        SQLHandler.cur.execute(f'INSERT INTO tasks VALUES ({", ".join(list("?" * len(data)))})', data)
         SQLHandler.conn.commit()
 
     @staticmethod

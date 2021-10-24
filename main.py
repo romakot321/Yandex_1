@@ -11,6 +11,7 @@ from maindesing import Ui_MainWindow
 from dataHandler import *
 from tasksList import *
 from user import *
+from shop import *
 
 ConfigHandler = ConfigHandler()
 
@@ -32,7 +33,8 @@ class App(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
         self.lastupdate_time = datetime.datetime.now()
-        self.is_login = False
+        self.is_login = False  # Пользователь авторизован?
+        self.shop_open = False  # Окно с магазином открытo?
         self.setupUi(self)
         self.initUI()
         self.initData()
@@ -59,15 +61,24 @@ class App(QMainWindow, Ui_MainWindow):
     def initData(self):
         """Обновление данных в выводе задач"""
         self.tasksListWidget.clear()
+        # --- Функциональные кнопки
         if not self.is_login:
             self.tasksListWidget.addItem(QListWidgetItem('Войти или зарегистрироваться'))
-        self.tasksListWidget.addItem(QListWidgetItem('Создать задачу'))
-        for task in TasksList.get_tasks_list():
-            if task.done.strip() not in ('False', 'None'):
-                if get_self_user().name not in (task.creator_name,
-                                                task.performer_name):
-                    continue
-            self.tasksListWidget.addItem(QListWidgetItem(task.title))
+        else:
+            if self.shop_open:
+                self.tasksListWidget.addItem(QListWidgetItem('Вернуться'))
+                for i in Shop.items:
+                    self.tasksListWidget.addItem(QListWidgetItem(i.name))
+            else:
+                self.tasksListWidget.addItem(QListWidgetItem('Создать задачу'))
+                self.tasksListWidget.addItem(QListWidgetItem('Открыть магазин'))
+                # --- Список задач
+                for task in TasksList.get_tasks_list(sort=True):
+                    if task.done.strip() not in ('False', 'None'):
+                        if get_self_user().name not in (task.creator_name,
+                                                        task.performer_name):
+                            continue
+                    self.tasksListWidget.addItem(QListWidgetItem(task.title))
 
     def eventFilter(self, sender, event):
         # --- Обновление отображенных данных (раз в 5 секунд)
@@ -79,8 +90,8 @@ class App(QMainWindow, Ui_MainWindow):
         if event.type() == 1:  # Has been clicked
             if sender is self.tasksListWidget:
                 task = self.tasksListWidget.currentItem()
-                if task:
-                    # --- Нажатие на пользовательские кнопки
+                if task and not self.shop_open:  # Обработка нажатий на задачи или функ кнопки
+                    # --- Нажатие на функциональные кнопки
                     if task.text() == 'Создать задачу':
                         for i in reversed(range(self.verticalLayout.count())):
                             w = self.verticalLayout.itemAt(i).widget()
@@ -113,11 +124,64 @@ class App(QMainWindow, Ui_MainWindow):
                         self.verticalLayout.addWidget(line_name)
                         self.verticalLayout.addWidget(line_psw)
                         self.verticalLayout.addWidget(loginbutton)
+                    elif task.text() == 'Открыть магазин':
+                        self.shop_open = True
+                        self.initData()
                     else:
                         task = TasksList.get_task(task.text())
                         self.show_task(task)
                         self.initData()
+                elif task and self.shop_open:  # Отработка нажатий на предметы магазина
+                    if task.text() == 'Вернуться':
+                        self.shop_open = False
+                        self.initData()
+                    else:
+                        i = Shop.get_shopitem(task.text())
+                        for i in reversed(range(self.verticalLayout.count())):
+                            w = self.verticalLayout.itemAt(i).widget()
+                            w.setParent(None)
+                            w.deleteLater()
+                        s = f'{i.name}\n\tЦена: {i.price} ЗМ'
+                        self.description.setText(s)
+                        # --- Форма для получения нужных аргументов
+                        for arg_name, field in Shop.input_fields.items():
+                            if arg_name in i.need_args:
+                                self.verticalLayout.addWidget(field[0](field[1]))
+                        button = QPushButton("Выполнить")
+                        self.verticalLayout.addWidget(button)
+                        button.clicked.connect(self.start_shopitem)
+
         return super().eventFilter(sender, event)
+
+    def start_shopitem(self):
+        """Выполнение действия предмета магазина"""
+        itemname = self.description.toPlainText().split('\n\t')[0]
+        item = Shop.get_shopitem(itemname)
+        args = []
+        for i in reversed(range(self.verticalLayout.count())):
+            w = self.verticalLayout.itemAt(i).widget()
+            if w.text() == 'Выполнить':
+                continue
+            else:
+                args.append(w.text())
+        args = list(reversed(args))
+        # Преобразование названий обьектов в классы
+        for i in range(len(item.need_args)):
+            if item.need_args[i] == 'task':
+                args[i] = Task.get_task(args[i])
+                if args[i].creator_name != get_self_user().name:
+                    return
+            elif item.need_args[i] == 'user':
+                args[i] = User.get_user(args[i])
+            elif item.need_args[i] == 'selfuser':
+                args[i] = get_self_user()
+        item.func(*args)
+        get_self_user().balance -= item.price
+        for i in reversed(range(self.verticalLayout.count())):
+            w = self.verticalLayout.itemAt(i).widget()
+            w.setParent(None)
+            w.deleteLater()
+        self.description.setText('Приоритет задачи был поднят на 1')
 
     def login_user(self):
         """Получение значений из формы и попытка входа в аккаунт.
@@ -192,9 +256,12 @@ class App(QMainWindow, Ui_MainWindow):
             return
         else:
             # --- Создание задания
-            Task(title, price, desc, get_self_user().name).save()
-            get_self_user().balance -= price
-            self.initData()
+            try:
+                Task(title, price, desc, get_self_user().name).save()
+                get_self_user().balance -= price
+                self.initData()
+            except TaskAlreadyExist:
+                self.description.setText('Задание с таким названием, созданное вами, уже существует')
 
     def show_task(self, task):
         """Вывод задания. None для опустошения вывода"""

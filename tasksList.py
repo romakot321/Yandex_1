@@ -5,6 +5,10 @@ import platform
 from dataHandler import SQLHandler
 
 
+class TaskAlreadyExist(Exception):
+    pass
+
+
 def get_tasksInfo_text(user):
     """Получение информации о заданиях пользователя
     :return str
@@ -28,14 +32,17 @@ def get_tasksInfo_text(user):
 
 class TasksList:
     @staticmethod
-    def get_tasks_list(is_for_save=False):
+    def get_tasks_list(is_for_save=False, sort=False):
         """Получение списка заданий
         :param is_for_save: Список для сохранения в БД?
+        :param sort: Отсортировать по приорететности?
         :return: list
         """
         a = []
         for v in SQLHandler.get_tasks_list():
             a.append(Task(*v) if not is_for_save else TaskForSave(*v))
+        if sort:
+            a = sorted(a, key=lambda i: i.priority)
         return a
 
     @staticmethod
@@ -43,7 +50,7 @@ class TasksList:
         """Получение задания из списка по загаловку
 
         :param data: Загаловок или айди
-        :return: class Task
+        :return: class 'Task'
         """
         if isinstance(data, str) and data.isdigit():
             data = int(data)
@@ -55,7 +62,7 @@ class TasksList:
 
 class Task(TasksList):
     def __init__(self, title, price, description, creator_name,
-                 performer_name=None, create_time=None, id=None, done=None):
+                 performer_name=None, create_time=None, id=None, done=None, priority=0):
         """Создание задания
 
         :param title: Загаловок
@@ -73,13 +80,20 @@ class Task(TasksList):
         self.performer_name = performer_name
         self.create_time = create_time if create_time is not None else datetime.datetime.now()
         self.done = False
+        self.priority = priority
         if done is not None:
             self.done = False if not done else done
 
     def save(self):
         """Сохранение задания в БД"""
+        for i in TasksList.get_tasks_list():
+            if i.id == self.id:
+                continue
+            if i.creator_name == self.creator_name and i.title == self.title:
+                raise TaskAlreadyExist(f"Task with name {self.title} and created by {self.creator_name} already exist")
         SQLHandler.new_task(self.title, str(self.price), self.description, self.creator_name,
-                             str(self.performer_name), str(self.create_time), str(self.id), str(self.done))
+                            str(self.performer_name), str(self.create_time), str(self.id), str(self.done),
+                            str(self.priority))
 
     @staticmethod
     def delete(taskid):
@@ -120,10 +134,10 @@ class Task(TasksList):
 class TaskForSave(Task):
     """Используется для сохранения данных пользователя в файл"""
     def __init__(self, title, price, description, creator_name,
-                 performer_name=None, createtime=None, id=None, done=None):
+                 performer_name=None, createtime=None, id=None, done=None, priority=0):
         args = {'title': title, 'price': price, 'description': description,
                 'creator_name': creator_name, 'performer_name': performer_name,
-                'create_time': createtime, 'id': id, 'done': done}
+                'create_time': createtime, 'id': id, 'done': done, 'priority': priority}
         for i, k in args.items():
             self.__dict__[i] = k
 
