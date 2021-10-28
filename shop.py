@@ -1,8 +1,6 @@
 from PyQt5.QtWidgets import QLineEdit
 from typing import List, Dict
 
-from tasksList import Task
-
 
 def _task_add_priority(*args):
     """args = (task)"""
@@ -25,6 +23,7 @@ class ShopItem:
         self.price = price
         self.need_args = need_args
         self.func = func
+
 
 class Shop:
     """Обьект магазина

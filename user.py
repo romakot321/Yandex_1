@@ -8,16 +8,14 @@ class IncorrectLoginData(Exception):
     pass
 
 
-def get_self_user():
+def get_self_user() -> 'User':
     try:
         if ConfigHandler.__getattr__(ConfigHandler, 'username'):
-            u = User(ConfigHandler.__getattr__(ConfigHandler, 'username'),
-                     password=ConfigHandler.__getattr__(ConfigHandler, 'password'))
+            u = User.get_user(ConfigHandler.__getattr__(ConfigHandler, 'username'))
+            u.password = ConfigHandler.__getattr__(ConfigHandler, 'password')
             if u.login(with_exceptions=False):
                 return u
-            else:
-                return 'Пожалуйста, войдите в аккаунт'
-        return User.get_user(platform.node())
+        return 'Пожалуйста, войдите в аккаунт'
     except UserNotFound:
         return 'Пожалуйста, войдите в аккаунт'
 
@@ -45,9 +43,12 @@ class User:
         SQLHandler.new_user(self.name, str(self.balance), self.password, str(self.additions))
 
     def login(self, with_exceptions=True):
-        """Вход в аккаунт(сверка данных с БД)"""
+        """Вход в аккаунт(сверка данных с БД)
+
+        :raises: UserNotFound, IncorrectLoginData"""
         try:
-            name, _, psw = SQLHandler.get_user('name', self.name)[0]
+            a = SQLHandler.get_user('name', self.name)[0]
+            name, psw = a[0], a[2]
         except ValueError:
             if with_exceptions:
                 raise UserNotFound()
@@ -76,7 +77,8 @@ class User:
 
     @staticmethod
     def get_user(name):
-        data = SQLHandler.get_user('name', name)[0][:-1]
+        data = SQLHandler.get_user('name', name)[0]
+        data = (data[0], data[1], '', data[3])  # Удаление пароля из данных
         return User(*data)
 
     def __str__(self):

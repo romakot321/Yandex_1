@@ -56,7 +56,7 @@ class SQLHandler:
         SQLHandler.cur.executescript(a)
 
     @staticmethod
-    def get_user(param_name, param_value):
+    def get_user(param_name, param_value) -> tuple:
         a = SQLHandler.cur.execute(f'SELECT * FROM users WHERE {param_name} = "{param_value}"').fetchall()
         if not a:
             raise UserNotFound()
