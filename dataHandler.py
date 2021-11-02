@@ -46,6 +46,9 @@ class SQLHandler:
             done           STRING  DEFAULT None,
             priority       INT     DEFAULT (0)
         );
+        '''
+        SQLHandler.cur.executescript(a)
+        a = '''
         CREATE TABLE users (
             name      VARCHAR UNIQUE,
             balance   INTEGER DEFAULT (0),

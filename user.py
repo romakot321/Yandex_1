@@ -32,6 +32,7 @@ class User:
             additions = {}
         else:
             additions = json.loads(additions)
+        self.is_exist = None
         self.name = name
         self.balance = 5
         self.password = password
@@ -78,7 +79,7 @@ class User:
     @staticmethod
     def get_user(name):
         data = SQLHandler.get_user('name', name)[0]
-        data = (data[0], data[1], '', data[3])  # Удаление пароля из данных
+        data = (data[0], data[1], '', *data[3:])  # Удаление пароля из данных
         return User(*data)
 
     def __str__(self):
@@ -86,11 +87,17 @@ class User:
 
     def __setattr__(self, key, value):
         self.__dict__[key] = value
-        users_list = User.get_user_list(is_save=True)
-        u = [u for u in users_list if u.name == self.name]
-        if len(u) == 1:
+        if key == 'is_exist':
+            return
+        if self.is_exist is None:
+            u = [u for u in User.get_user_list(is_save=True) if u.name == self.name]  # Check user is exist
+            if len(u) == 1:
+                self.is_exist = True
+            else:
+                self.is_exist = False
+        elif self.is_exist is True:
             if isinstance(value, dict):
-                value = str(value)
+                value = json.dumps(value)
             SQLHandler.update_user(self.name, key, value)
 
 

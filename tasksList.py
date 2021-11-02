@@ -72,6 +72,7 @@ class Task(TasksList):
         :param performer_name: Ник исполнителя
         :param done: Примечание к выполненному заданию
         """
+        self.is_exist = None
         self.id = int(id) if id is not None else len(Task.get_tasks_list(True))
         self.title = str(title)
         self.price = int(price)
@@ -117,9 +118,15 @@ class Task(TasksList):
     def __setattr__(self, key, value):
         """Изменение атрибута с занесением в БД"""
         self.__dict__[key] = value
-        tasks_list = Task.get_tasks_list(is_for_save=True)
-        t = [t for t in tasks_list if int(t.id) == self.id]
-        if len(t) == 1:
+        if key == 'is_exist':
+            return
+        if self.is_exist is None:
+            t = [t for t in Task.get_tasks_list(is_for_save=True) if int(t.id) == self.id]
+            if len(t) == 1:
+                self.is_exist = True
+            else:
+                self.is_exist = False
+        elif self.is_exist is True:
             SQLHandler.update_task(self.id, key, value)
 
     def __str__(self):

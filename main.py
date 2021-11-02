@@ -43,7 +43,7 @@ class App(QMainWindow, Ui_MainWindow):
         try:
             u = get_self_user()
             if isinstance(u, str):
-                pass
+                return
         except UserNotFound:
             pass
         else:
@@ -91,11 +91,7 @@ class App(QMainWindow, Ui_MainWindow):
         if task and not self.shop_open:  # Обработка нажатий на задачи или функ кнопки
             # --- Нажатие на функциональные кнопки
             if task.text() == 'Создать задачу':
-                for i in reversed(range(self.verticalLayout.count())):
-                    w = self.verticalLayout.itemAt(i).widget()
-                    w.setParent(None)
-                    w.deleteLater()
-                self.description.setText('')
+                self.clearOutput()
                 # --- Форма для создание задачи
                 line_title = QLineEdit('Название')
                 line_price = QLineEdit('Цена за выполнение')
@@ -108,10 +104,7 @@ class App(QMainWindow, Ui_MainWindow):
                 self.verticalLayout.addWidget(line_price)
                 self.verticalLayout.addWidget(createButton)
             elif task.text() == 'Войти или зарегистрироваться':
-                for i in reversed(range(self.verticalLayout.count())):
-                    w = self.verticalLayout.itemAt(i).widget()
-                    w.setParent(None)
-                    w.deleteLater()
+                self.clearOutput()
                 self.description.setText('')
                 # --- Форма для ввода данных пользователя
                 line_name = QLineEdit('Ник')
@@ -124,6 +117,7 @@ class App(QMainWindow, Ui_MainWindow):
                 self.verticalLayout.addWidget(loginbutton)
             elif task.text() == 'Открыть магазин':
                 self.shop_open = True
+                self.clearOutput()
                 self.initData()
             else:
                 task = TasksList.get_task(task.text())
@@ -132,12 +126,10 @@ class App(QMainWindow, Ui_MainWindow):
         elif task and self.shop_open:  # Отработка нажатий на предметы магазина
             if task.text() == 'Вернуться':
                 self.shop_open = False
+                self.clearOutput()
                 self.initData()
             else:
-                for i in reversed(range(self.verticalLayout.count())):
-                    w = self.verticalLayout.itemAt(i).widget()
-                    w.setParent(None)
-                    w.deleteLater()
+                self.clearOutput()
                 i = Shop.get_shopitem(task.text())
                 s = f'{i.name}\n\tЦена: {i.price} ЗМ'
                 self.description.setText(s)
@@ -150,11 +142,20 @@ class App(QMainWindow, Ui_MainWindow):
                 button.clicked.connect(self.start_shopitem)
 
     def addItem(self, text, func=None):
+        """Добавить кнопку в tasksListWidget"""
         if func is None:
             func = self.buttonPress
         b = QPushButton(text=text)
         b.clicked.connect(func)
         self.tasksListLayout.addWidget(b)
+
+    def clearOutput(self):
+        """Отчистить вывод(self.description и self.verticalLayout"""
+        for i in reversed(range(self.verticalLayout.count())):
+            w = self.verticalLayout.itemAt(i).widget()
+            w.setParent(None)
+            w.deleteLater()
+        self.description.setText('')
 
     def start_shopitem(self):
         """Выполнение действия предмета магазина"""
@@ -182,10 +183,7 @@ class App(QMainWindow, Ui_MainWindow):
                 args[i] = get_self_user()
         item.func(*args)
         get_self_user().balance -= item.price
-        for i in reversed(range(self.verticalLayout.count())):
-            w = self.verticalLayout.itemAt(i).widget()
-            w.setParent(None)
-            w.deleteLater()
+        self.clearOutput()
         self.description.setText('Выполнено')
 
     def login_user(self):
@@ -354,6 +352,13 @@ if __name__ == '__main__':
         SQLHandler.initialize()
     if 'config.ini' not in os.listdir():
         ConfigHandler.initialize()
+    try:
+        User.get_user('a').login(with_exceptions=False)
+    except sqlite3.OperationalError as e:
+        if 'no such table' in str(e):
+            SQLHandler.initialize()
+    except Exception as e:
+        pass
     app = QApplication(sys.argv)
     ex = App()
     ex.show()

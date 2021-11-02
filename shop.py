@@ -1,20 +1,23 @@
 from PyQt5.QtWidgets import QLineEdit
 from typing import List, Dict
 
+# --- Функции для предметов магазина
+
 
 def _task_add_priority(*args):
     """args = (task)"""
     args[0].priority += 1
 
 
-def _user_set_namecolor(*args):
+def _user_set_namecolor(u):
     """args = (user)"""
-    args[0].additions['color'] = 'red'
+    u.additions = {**u.additions, **{'color': 'red'}}
 
 
 class ShopItem:
     def __init__(self, name, price, need_args: tuple, func):
         """Создание обьекта предмета магазина
+
         :param name:
         :param price:
         :param need_args: Аргументы, необходимые для функционала, передаются не обьекты, а названия классов
@@ -22,13 +25,14 @@ class ShopItem:
         self.name = name
         self.price = price
         self.need_args = need_args
+        # Есть: selfuser, user, task
         self.func = func
 
 
 class Shop:
     """Обьект магазина
 
-    :arg items: Предметы магазин
+    :arg items: Предметы магазина
     :type items: tuple
     :arg input_fields: Поля для ввода need_args, вид - 'arg_name': (class, *args_for_class)
     :type input_fields: dict"""
