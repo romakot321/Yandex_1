@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import QApplication, QMainWindow, QPushButton, QDialog
 from PyQt5.QtWidgets import QWidget, QLineEdit, QInputDialog
 from PyQt5.QtCore import QEvent, Qt, QTimer, QTime
 
+import dataHandler
 from maindesing import Ui_MainWindow
 
 from dataHandler import *
@@ -69,11 +70,12 @@ class App(QMainWindow, Ui_MainWindow):
                 for i in Shop.items:
                     self.addItem(i.name)
             else:
+                self.addItem('Выйти из аккаунта')
                 self.addItem('Создать задачу')
                 self.addItem('Открыть магазин')
                 # --- Список задач
                 for task in TasksList.get_tasks_list(sort=True):
-                    if task.done.strip() not in ('False', 'None'):
+                    if str(task.done).strip() not in ('False', 'None'):
                         if get_self_user().name not in (task.creator_name,
                                                         task.performer_name):
                             continue
@@ -103,6 +105,9 @@ class App(QMainWindow, Ui_MainWindow):
                 self.verticalLayout.addWidget(line_title)
                 self.verticalLayout.addWidget(line_price)
                 self.verticalLayout.addWidget(createButton)
+            elif task.text() == "Выйти из аккаунта":
+                self.is_login = False
+                self.initData()
             elif task.text() == 'Войти или зарегистрироваться':
                 self.clearOutput()
                 self.description.setText('')
@@ -150,7 +155,7 @@ class App(QMainWindow, Ui_MainWindow):
         self.tasksListLayout.addWidget(b)
 
     def clearOutput(self):
-        """Отчистить вывод(self.description и self.verticalLayout"""
+        """Отчистить вывод(self.description и self.verticalLayout)"""
         for i in reversed(range(self.verticalLayout.count())):
             w = self.verticalLayout.itemAt(i).widget()
             w.setParent(None)
@@ -202,11 +207,12 @@ class App(QMainWindow, Ui_MainWindow):
                 elif not name:
                     name = w.text()
         if name and psw:
-            u = User(name, password=psw)
             try:
+                u = User.get_user(name)
+                u.password = psw
                 u.login()
             except UserNotFound:
-                u.save()
+                User(name, password=psw).save()
                 ConfigHandler.username = name
                 ConfigHandler.password = psw
                 self.description.setText('Пользователь создан')
@@ -218,10 +224,7 @@ class App(QMainWindow, Ui_MainWindow):
                 self.is_login = True
                 ConfigHandler.username = name
                 ConfigHandler.password = psw
-            for i in reversed(range(self.verticalLayout.count())):
-                w = self.verticalLayout.itemAt(i).widget()
-                w.setParent(None)
-                w.deleteLater()
+            self.clearOutput()
             self.initData()
 
     def create_task(self):
@@ -266,24 +269,21 @@ class App(QMainWindow, Ui_MainWindow):
             except TaskAlreadyExist:
                 self.description.setText('Задание с таким названием, созданное вами, уже существует')
 
-    def show_task(self, task):
-        """Вывод задания. None для опустошения вывода"""
-        for i in reversed(range(self.verticalLayout.count())):
-            w = self.verticalLayout.itemAt(i).widget()
-            w.setParent(None)
-            w.deleteLater()
-        if task is None:
-            self.description.setText('')
-            return
+    def show_task(self, task: 'Task'):
+        """Вывод задания"""
+        self.clearOutput()
         self.description.setText(str(task).replace('/n', '\n\t'))
         username = get_self_user().name
         if username == task.creator_name:
             if task.performer_name == 'None':
                 del_button = QPushButton(text=f'Удалить {task.id}')
                 del_button.clicked.connect(self.delete_task)
+                agreelist_button = QPushButton(text=f'Список откликнувшихся {task.id}')
+                agreelist_button.clicked.connect(self.show_agree_list_task)
                 self.verticalLayout.addWidget(del_button)
+                self.verticalLayout.addWidget(agreelist_button)
             else:
-                if task.done.strip() not in ('False', 'None'):
+                if str(task.done) not in ('False', 'None'):
                     self.description.setText(str(task).replace('/n', '\n\t')
                                              + f'\n\n\n\tСсылка для получения кода: {task.done}')
                     done_button = QPushButton(text=f'Завершить {task.id}')
@@ -294,38 +294,40 @@ class App(QMainWindow, Ui_MainWindow):
                         decline_button.clicked.connect(self.decline_task)
                         self.verticalLayout.addWidget(decline_button)
         elif username == task.performer_name:
-            if task.done.startswith('Decline('):
+            if str(task.done).startswith('Decline('):
                 self.description.setText(str(task).replace('/n', '\n\t')
                                          + f'\n\n\n\tПричина отклонения задачи: {task.done}')
-            elif task.done not in ('False', 'None'):
+            elif str(task.done) not in ('False', 'None'):
                 self.description.setText(str(task).replace('/n', '\n\t')
                                          + f'\n\n\n\tСсылка для получения кода: {task.done}')
             done_button = QPushButton(text=f'Завершить {task.id}')
             done_button.clicked.connect(self.done_task)
             self.verticalLayout.addWidget(done_button)
-        else:
+        elif task.performer_name == 'None' and username not in task.agree_list:
             agree_button = QPushButton(text=f'Взяться {task.id}')
-            agree_button.clicked.connect(self.agree_task)
+            agree_button.clicked.connect(self.add_agree_task)
             self.verticalLayout.addWidget(agree_button)
 
     def delete_task(self):
         task_id = self.sender().text().replace("Удалить", '').strip()
         get_self_user().balance += Task.get_task(int(task_id)).price
         Task.delete(task_id)
-        self.show_task(None)
+        self.clearOutput()
         self.initData()
 
     def done_task(self):
         taskid = self.sender().text().replace("Завершить", '').strip()
-        url = None
+        url = Task.get_task(taskid).done
         if Task.get_task(taskid).performer_name == get_self_user().name:
             text, ok = QInputDialog.getText(self, 'Input Dialog',
                                             'Введите ссылку для получения файлов с кодом:')
             if ok:
                 url = text
-        Task.finish(taskid, url)
         if Task.get_task(taskid).performer_name == get_self_user().name:
+            Task.finish(taskid, url)
             self.show_task(Task.get_task(int(taskid)))
+        else:
+            Task.finish(taskid, url)
         self.initData()
 
     def decline_task(self):
@@ -335,10 +337,30 @@ class App(QMainWindow, Ui_MainWindow):
         if ok and str(text):
             task = Task.get_task(int(taskid))
             task.done = 'Decline(' + str(text) + ')'
+            self.show_task(Task.get_task(int(taskid)))
 
-    def agree_task(self):
+    def show_agree_list_task(self):
+        taskid = self.sender().text().replace("Список откликнувшихся", '').strip()
+        for i in reversed(range(self.tasksListLayout.count())):
+            w = self.tasksListLayout.itemAt(i).widget()
+            w.setParent(None)
+            w.deleteLater()
+        self.addItem("Вернуться", self.choice_agree_task)
+        for nickname in Task.get_task(taskid).agree_list:
+            if nickname:
+                self.addItem(nickname + '\t' + taskid, self.choice_agree_task)
+
+    def choice_agree_task(self):
+        if self.sender().text() == "Вернуться":
+            self.initData()
+            return
+        nickname, taskid = self.sender().text().split('\t')
+        Task.agree(taskid, nickname)
+        self.show_task(Task.get_task(int(taskid)))
+
+    def add_agree_task(self):
         taskid = self.sender().text().replace("Взяться", '').strip()
-        Task.agree(taskid)
+        Task.add_agree(taskid)
         self.show_task(Task.get_task(int(taskid)))
 
 

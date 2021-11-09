@@ -17,13 +17,13 @@ def get_tasksInfo_text(user):
     tasks_list = TasksList.get_tasks_list()
     # --- Проверка на непроверенные задачи
     notcheck_list = [t for t in tasks_list if t.creator_name == user.name and \
-                     str(t.performer_name) != 'None' and t.done not in ('False', 'None') and \
-                     not t.done.startswith('Decline(')]
+                     str(t.performer_name) != 'None' and str(t.done) not in ('False', 'None') and \
+                     not str(t.done).startswith('Decline(')]
     if len(notcheck_list) > 0:
         s += 'У вас есть непроверенные задачи\n'
     # --- Проверка на отклоненные задачи
     decline_list = [t for t in tasks_list if t.performer_name == user.name and \
-                    t.done.startswith('Decline(')]
+                    str(t.done).startswith('Decline(')]
     if len(decline_list) > 0:
         s += 'У вас есть отклоненные задачи\n'
 
@@ -32,7 +32,7 @@ def get_tasksInfo_text(user):
 
 class TasksList:
     @staticmethod
-    def get_tasks_list(is_for_save=False, sort=False):
+    def get_tasks_list(is_for_save=False, sort=False) -> list:
         """Получение списка заданий
         :param is_for_save: Список для сохранения в БД?
         :param sort: Отсортировать по приорететности?
@@ -46,7 +46,7 @@ class TasksList:
         return a
 
     @staticmethod
-    def get_task(data):
+    def get_task(data) -> 'Task':
         """Получение задания из списка по загаловку
 
         :param data: Загаловок или айди
@@ -62,7 +62,8 @@ class TasksList:
 
 class Task(TasksList):
     def __init__(self, title, price, description, creator_name,
-                 performer_name=None, create_time=None, id=None, done=None, priority=0):
+                 performer_name=None, create_time=None, id=None, done=None, priority=0,
+                 agree_list=None):
         """Создание задания
 
         :param title: Загаловок
@@ -71,6 +72,8 @@ class Task(TasksList):
         :param creator_name: Ник создателя задания
         :param performer_name: Ник исполнителя
         :param done: Примечание к выполненному заданию
+        :param priority: Приорететность задачи в списке
+        :param agree_list: Список откликнувшихся на задачу
         """
         self.is_exist = None
         self.id = int(id) if id is not None else len(Task.get_tasks_list(True))
@@ -82,6 +85,9 @@ class Task(TasksList):
         self.create_time = create_time if create_time is not None else datetime.datetime.now()
         self.done = False
         self.priority = priority
+        if agree_list == "['']":
+            agree_list = None
+        self.agree_list = agree_list.split(', ') if agree_list is not None else ''
         if done is not None:
             self.done = False if not done else done
 
@@ -94,7 +100,7 @@ class Task(TasksList):
                 raise TaskAlreadyExist(f"Task with name {self.title} and created by {self.creator_name} already exist")
         SQLHandler.new_task(self.title, str(self.price), self.description, self.creator_name,
                             str(self.performer_name), str(self.create_time), str(self.id), str(self.done),
-                            str(self.priority))
+                            str(self.priority), str(self.agree_list))
 
     @staticmethod
     def delete(taskid):
@@ -105,15 +111,21 @@ class Task(TasksList):
         """Отметить задачу выполненной или завершить задачу"""
         task = Task.get_task(int(taskid))
         if get_self_user().name == task.creator_name:
-            Task.delete(int(taskid))
             User.get_user(task.performer_name).balance += task.price
+            Task.delete(int(taskid))
         else:
             task.done = url
 
     @staticmethod
-    def agree(taskid):
-        task = Task.get_task(int(taskid))
-        task.performer_name = get_self_user().name
+    def add_agree(taskid):
+        t = Task.get_task(int(taskid))
+        t.agree_list = t.agree_list + [get_self_user().name]
+
+    @staticmethod
+    def agree(taskid, username):
+        t = Task.get_task(int(taskid))
+        t.performer_name = username
+        t.agree_list = ''
 
     def __setattr__(self, key, value):
         """Изменение атрибута с занесением в БД"""
@@ -127,6 +139,8 @@ class Task(TasksList):
             else:
                 self.is_exist = False
         elif self.is_exist is True:
+            if isinstance(value, list):
+                value = ', '.join(value)
             SQLHandler.update_task(self.id, key, value)
 
     def __str__(self):
@@ -141,10 +155,12 @@ class Task(TasksList):
 class TaskForSave(Task):
     """Используется для сохранения данных пользователя в файл"""
     def __init__(self, title, price, description, creator_name,
-                 performer_name=None, createtime=None, id=None, done=None, priority=0):
+                 performer_name=None, createtime=None, id=None, done=None, priority=0,
+                 agree_list=None):
         args = {'title': title, 'price': price, 'description': description,
                 'creator_name': creator_name, 'performer_name': performer_name,
-                'create_time': createtime, 'id': id, 'done': done, 'priority': priority}
+                'create_time': createtime, 'id': id, 'done': done, 'priority': priority,
+                'agree_list': agree_list}
         for i, k in args.items():
             self.__dict__[i] = k
 

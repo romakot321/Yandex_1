@@ -44,7 +44,8 @@ class SQLHandler:
             id             INT     UNIQUE
                                    NOT NULL,
             done           STRING  DEFAULT None,
-            priority       INT     DEFAULT (0)
+            priority       INT     DEFAULT (0),
+            agree_list     STRING  DEFAULT ""
         );
         '''
         SQLHandler.cur.executescript(a)

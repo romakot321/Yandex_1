@@ -21,12 +21,13 @@ def get_self_user() -> 'User':
 
 
 class User:
-    def __init__(self, name, balance=None, password='', additions=None):
+    def __init__(self, name, balance=None, password='', additions: dict = None):
         '''Создание юзера
 
         :param name: Ник
         :param balance: Баланс
         :param password: Пароль от аккаунта(нужен для входа)
+        :param additions: Дополнения(например color)
         '''
         if additions is None:
             additions = {}
@@ -34,11 +35,12 @@ class User:
             additions = json.loads(additions)
         self.is_exist = None
         self.name = name
-        self.balance = 5
-        self.password = password
-        self.additions = additions
         if balance is not None:
             self.balance = int(balance)
+        else:
+            self.balance = 5
+        self.password = password
+        self.additions = additions
 
     def save(self):
         SQLHandler.new_user(self.name, str(self.balance), self.password, str(self.additions))
@@ -87,7 +89,7 @@ class User:
 
     def __setattr__(self, key, value):
         self.__dict__[key] = value
-        if key == 'is_exist':
+        if key == 'is_exist' or key == 'password':
             return
         if self.is_exist is None:
             u = [u for u in User.get_user_list(is_save=True) if u.name == self.name]  # Check user is exist
